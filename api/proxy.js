@@ -1,39 +1,26 @@
-export default async function handler(req, res) {
-  if (req.method !== "GET") {
-    return res.status(405).json({
-      error: "Method not allowed"
-    });
-  }
-
-  const { url } = req.query;
-
-  if (!url) {
-    return res.status(400).json({
-      error: "Missing url parameter"
-    });
-  }
-
-  let target;
-
+module.exports = async function handler(req, res) {
   try {
-    target = new URL(url);
-  } catch {
-    return res.status(400).json({
-      error: "Invalid URL"
-    });
-  }
+    const targetUrl = req.query.url;
 
-  if (!["http:", "https:"].includes(target.protocol)) {
-    return res.status(400).json({
-      error: "Only HTTP/HTTPS allowed"
-    });
-  }
+    if (!targetUrl) {
+      return res.status(400).json({
+        error: "Falta la URL"
+      });
+    }
 
-  try {
+    const target = new URL(targetUrl);
+
+    if (!["http:", "https:"].includes(target.protocol)) {
+      return res.status(400).json({
+        error: "Solo se permiten HTTP y HTTPS"
+      });
+    }
+
     const response = await fetch(target.href, {
+      method: "GET",
       redirect: "follow",
       headers: {
-        "User-Agent": "WebOS11/1.0"
+        "User-Agent": "WebOS-11"
       }
     });
 
@@ -41,7 +28,7 @@ export default async function handler(req, res) {
       response.headers.get("content-type") ||
       "application/octet-stream";
 
-    const buffer = Buffer.from(
+    const data = Buffer.from(
       await response.arrayBuffer()
     );
 
@@ -49,12 +36,13 @@ export default async function handler(req, res) {
     res.setHeader("Content-Type", contentType);
     res.setHeader("Cache-Control", "no-store");
 
-    return res.send(buffer);
+    return res.send(data);
 
   } catch (error) {
-    return res.status(502).json({
-      error: "Proxy request failed",
-      message: error.message
+    console.error(error);
+
+    return res.status(500).json({
+      error: "Error del proxy"
     });
   }
-}
+};
