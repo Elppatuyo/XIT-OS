@@ -1,76 +1,49 @@
-const apps = [];
+const desktopApps = document.getElementById("desktopApps");
+const startButton = document.getElementById("startButton");
+const startMenu = document.getElementById("startMenu");
+const addAppButton = document.getElementById("addAppButton");
+const settingsButton = document.getElementById("settingsButton");
+const addAppModal = document.getElementById("addAppModal");
+const cancelButton = document.getElementById("cancelButton");
+const saveButton = document.getElementById("saveButton");
+const appName = document.getElementById("appName");
+const appURL = document.getElementById("appURL");
+const clock = document.getElementById("clock");
 
-const appList = document.createElement("div");
-appList.id = "app-list";
-document.body.appendChild(appList);
+let apps = JSON.parse(localStorage.getItem("webos_apps") || "[]");
+let zIndex = 20;
 
-function addApp() {
-  const nameInput = document.querySelector(
-    'input[placeholder="Nombre"]'
-  );
-
-  const urlInput = document.querySelector(
-    'input[placeholder="https://ejemplo.com"]'
-  );
-
-  const name = nameInput?.value.trim();
-  const url = urlInput?.value.trim();
-
-  if (!name || !url) {
-    alert("Escribe un nombre y una URL");
-    return;
-  }
-
-  let validUrl;
-
-  try {
-    validUrl = new URL(url);
-
-    if (!["http:", "https:"].includes(validUrl.protocol)) {
-      throw new Error();
-    }
-  } catch {
-    alert("Introduce una URL válida");
-    return;
-  }
-
-  const app = {
-    id: Date.now(),
-    name,
-    url: validUrl.href
-  };
-
-  apps.push(app);
-
-  renderApp(app);
-
-  nameInput.value = "";
-  urlInput.value = "";
+function saveApps() {
+  localStorage.setItem("webos_apps", JSON.stringify(apps));
 }
 
-function renderApp(app) {
-  const icon = document.createElement("button");
+function renderApps() {
+  if (!desktopApps) return;
+  desktopApps.innerHTML = "";
 
-  icon.className = "app-icon";
-  icon.innerHTML = `
-    <span class="app-icon-image">🌐</span>
-    <span>${escapeHtml(app.name)}</span>
-  `;
+  apps.forEach((app) => {
+    const icon = document.createElement("div");
+    icon.className = "desktopApp";
+    icon.innerHTML = `
+      <div class="appIcon">🌐</div>
+      <div class="appName">${escapeHTML(app.name)}</div>
+    `;
 
-  icon.onclick = () => openApp(app);
-
-  appList.appendChild(icon);
+    icon.addEventListener("click", () => openApp(app));
+    desktopApps.appendChild(icon);
+  });
 }
 
 function openApp(app) {
-  const windowElement = document.createElement("div");
+  const win = document.createElement("div");
+  win.className = "os-window";
+  win.style.zIndex = String(++zIndex);
+  win.style.left = "10%";
+  win.style.top = "10%";
 
-  windowElement.className = "os-window";
-
-  windowElement.innerHTML = `
+  win.innerHTML = `
     <div class="window-titlebar">
-      <span>${escapeHtml(app.name)}</span>
-
+      <span>${escapeHTML(app.name)}</span>
       <div class="window-buttons">
         <button class="minimize">−</button>
         <button class="maximize">□</button>
@@ -80,115 +53,159 @@ function openApp(app) {
 
     <div class="window-toolbar">
       <button class="back">←</button>
-
-      <input
-        class="address"
-        value="${escapeHtml(app.url)}"
-      />
-
+      <input class="address" value="${escapeAttr(app.url)}">
       <button class="go">Ir</button>
     </div>
 
     <div class="window-content">
-      <iframe
-        title="${escapeHtml(app.name)}"
-        src="${escapeHtml(app.url)}"
-      ></iframe>
+      <iframe class="frame" sandbox="allow-forms allow-modals allow-popups allow-scripts allow-same-origin"></iframe>
     </div>
   `;
 
-  document.body.appendChild(windowElement);
+  document.body.appendChild(win);
 
-  makeDraggable(windowElement);
+  const frame = win.querySelector(".frame");
+  const address = win.querySelector(".address");
+  const closeBtn = win.querySelector(".close");
+  const minimizeBtn = win.querySelector(".minimize");
+  const maximizeBtn = win.querySelector(".maximize");
+  const goBtn = win.querySelector(".go");
 
-  const closeButton =
-    windowElement.querySelector(".close");
-
-  closeButton.onclick = () => {
-    windowElement.remove();
-  };
-
-  const minimizeButton =
-    windowElement.querySelector(".minimize");
-
-  minimizeButton.onclick = () => {
-    windowElement.classList.toggle("minimized");
-  };
-
-  const maximizeButton =
-    windowElement.querySelector(".maximize");
-
-  maximizeButton.onclick = () => {
-    windowElement.classList.toggle("maximized");
-  };
-
-  const goButton =
-    windowElement.querySelector(".go");
-
-  const address =
-    windowElement.querySelector(".address");
-
-  const frame =
-    windowElement.querySelector("iframe");
-
-  goButton.onclick = () => {
+  function loadUrl(url) {
     try {
-      const newUrl = new URL(address.value);
+      const u = new URL(url);
+      if (!["http:", "https:"].includes(u.protocol)) throw new Error();
+      frame.src = "/api/proxy?url=" + encodeURIComponent(u.href);
+      address.value = u.href;
+    } catch {
+      alert("URL inválida");
+    }
+  }
 
-      if (!["http:", "https:"].includes(newUrl.protocol)) {
-        throw new Error();
-      }
+  closeBtn.onclick = () => win.remove();
+  minimizeBtn.onclick = () => win.classList.toggle("minimized");
+  maximizeBtn.onclick = () => win.classList.toggle("maximized");
+  goBtn.onclick = () => loadUrl(address.value.trim());
 
-      frame.src = newUrl.href;
+  win.querySelector(".back").onclick = () => {
+    try {
+      frame.contentWindow.history.back();
+    } catch {}
+  };
+
+  win.addEventListener("mousedown", () => {
+    win.style.zIndex = String(++zIndex);
+  });
+
+  makeDraggable(win);
+  loadUrl(app.url);
+}
+
+function makeDraggable(win) {
+  const bar = win.querySelector(".window-titlebar");
+  let dragging = false;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  bar.addEventListener("pointerdown", (e) => {
+    if (win.classList.contains("maximized")) return;
+    dragging = true;
+    const r = win.getBoundingClientRect();
+    offsetX = e.clientX - r.left;
+    offsetY = e.clientY - r.top;
+    bar.setPointerCapture(e.pointerId);
+  });
+
+  bar.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    win.style.left = `${e.clientX - offsetX}px`;
+    win.style.top = `${e.clientY - offsetY}px`;
+  });
+
+  bar.addEventListener("pointerup", () => {
+    dragging = false;
+  });
+}
+
+function showAddModal() {
+  if (addAppModal) addAppModal.classList.remove("hidden");
+}
+
+function hideAddModal() {
+  if (addAppModal) addAppModal.classList.add("hidden");
+}
+
+if (startButton && startMenu) {
+  startButton.onclick = () => startMenu.classList.toggle("show");
+}
+
+if (addAppButton) {
+  addAppButton.onclick = () => {
+    if (startMenu) startMenu.classList.remove("show");
+    showAddModal();
+  };
+}
+
+if (settingsButton) {
+  settingsButton.onclick = () => {
+    alert("Configuración todavía no está lista.");
+  };
+}
+
+if (cancelButton) {
+  cancelButton.onclick = hideAddModal;
+}
+
+if (saveButton) {
+  saveButton.onclick = () => {
+    const name = appName?.value.trim();
+    let url = appURL?.value.trim();
+
+    if (!name || !url) {
+      alert("Escribe un nombre y una URL");
+      return;
+    }
+
+    if (!/^https?:\/\//i.test(url)) {
+      url = "https://" + url;
+    }
+
+    try {
+      const parsed = new URL(url);
+      if (!["http:", "https:"].includes(parsed.protocol)) throw new Error();
+      apps.push({ name, url: parsed.href });
+      saveApps();
+      renderApps();
+      appName.value = "";
+      appURL.value = "";
+      hideAddModal();
     } catch {
       alert("URL inválida");
     }
   };
 }
 
-function makeDraggable(element) {
-  const titlebar =
-    element.querySelector(".window-titlebar");
-
-  let dragging = false;
-  let offsetX = 0;
-  let offsetY = 0;
-
-  titlebar.addEventListener("pointerdown", event => {
-    if (element.classList.contains("maximized")) {
-      return;
-    }
-
-    dragging = true;
-
-    const rect = element.getBoundingClientRect();
-
-    offsetX = event.clientX - rect.left;
-    offsetY = event.clientY - rect.top;
-
-    titlebar.setPointerCapture(event.pointerId);
-  });
-
-  titlebar.addEventListener("pointermove", event => {
-    if (!dragging) return;
-
-    element.style.left =
-      `${event.clientX - offsetX}px`;
-
-    element.style.top =
-      `${event.clientY - offsetY}px`;
-  });
-
-  titlebar.addEventListener("pointerup", () => {
-    dragging = false;
+function updateClock() {
+  if (!clock) return;
+  clock.textContent = new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit"
   });
 }
 
-function escapeHtml(value) {
-  return String(value)
+function escapeHTML(text) {
+  return String(text)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+
+function escapeAttr(text) {
+  return String(text).replaceAll('"', "&quot;");
+}
+
+setInterval(updateClock, 1000);
+updateClock();
+renderApps();
