@@ -90,19 +90,11 @@ function renderApps() {
 
 function openApp(app, index) {
 
-  /*
-   * Por ahora mostramos la URL.
-   *
-   * En la siguiente parte sustituiremos
-   * esto por nuestro proxy de Vercel.
-   */
+  const proxyURL =
+    "/api/proxy?url=" +
+    encodeURIComponent(app.url);
 
-  const url = app.url;
-
-  window.open(
-    url,
-    "_blank"
-  );
+  window.location.href = proxyURL;
 
 }
 
