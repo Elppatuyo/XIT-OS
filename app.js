@@ -1,253 +1,194 @@
-const desktopApps =
-  document.getElementById("desktopApps");
+const apps = [];
 
-const taskbarApps =
-  document.getElementById("taskbarApps");
+const appList = document.createElement("div");
+appList.id = "app-list";
+document.body.appendChild(appList);
 
-const startButton =
-  document.getElementById("startButton");
-
-const startMenu =
-  document.getElementById("startMenu");
-
-const addAppButton =
-  document.getElementById("addAppButton");
-
-const addAppModal =
-  document.getElementById("addAppModal");
-
-const cancelButton =
-  document.getElementById("cancelButton");
-
-const saveButton =
-  document.getElementById("saveButton");
-
-const appName =
-  document.getElementById("appName");
-
-const appURL =
-  document.getElementById("appURL");
-
-const clock =
-  document.getElementById("clock");
-
-
-let apps = JSON.parse(
-  localStorage.getItem("webos_apps") || "[]"
-);
-
-
-/* Guardar aplicaciones */
-
-function saveApps() {
-
-  localStorage.setItem(
-    "webos_apps",
-    JSON.stringify(apps)
+function addApp() {
+  const nameInput = document.querySelector(
+    'input[placeholder="Nombre"]'
   );
 
-}
-
-
-/* Mostrar aplicaciones */
-
-function renderApps() {
-
-  desktopApps.innerHTML = "";
-
-  apps.forEach((app, index) => {
-
-    const element =
-      document.createElement("div");
-
-    element.className =
-      "desktopApp";
-
-    element.innerHTML = `
-      <div class="appIcon">
-        🌐
-      </div>
-
-      <div class="appName">
-        ${escapeHTML(app.name)}
-      </div>
-    `;
-
-    element.onclick = () => {
-
-      openApp(app, index);
-
-    };
-
-    desktopApps.appendChild(element);
-
-  });
-
-}
-
-
-/* Abrir aplicación */
-
-function openApp(app, index) {
-
-  const proxyURL =
-    "/api/proxy?url=" +
-    encodeURIComponent(app.url);
-
-  window.location.href = proxyURL;
-
-}
-
-
-/* Agregar aplicación */
-
-addAppButton.onclick = () => {
-
-  startMenu.classList.remove(
-    "visible"
+  const urlInput = document.querySelector(
+    'input[placeholder="https://ejemplo.com"]'
   );
 
-  addAppModal.classList.remove(
-    "hidden"
-  );
-
-  appName.focus();
-
-};
-
-
-/* Cancelar */
-
-cancelButton.onclick = () => {
-
-  addAppModal.classList.add(
-    "hidden"
-  );
-
-};
-
-
-/* Guardar */
-
-saveButton.onclick = () => {
-
-  const name =
-    appName.value.trim();
-
-  let url =
-    appURL.value.trim();
+  const name = nameInput?.value.trim();
+  const url = urlInput?.value.trim();
 
   if (!name || !url) {
-
-    alert(
-      "Escribe el nombre y la URL."
-    );
-
+    alert("Escribe un nombre y una URL");
     return;
-
   }
 
-  if (
-    !/^https?:\/\//i.test(url)
-  ) {
-
-    url =
-      "https://" + url;
-
-  }
+  let validUrl;
 
   try {
+    validUrl = new URL(url);
 
-    new URL(url);
-
+    if (!["http:", "https:"].includes(validUrl.protocol)) {
+      throw new Error();
+    }
   } catch {
-
-    alert(
-      "La URL no es válida."
-    );
-
+    alert("Introduce una URL válida");
     return;
-
   }
 
-  apps.push({
+  const app = {
+    id: Date.now(),
+    name,
+    url: validUrl.href
+  };
 
-    name: name,
+  apps.push(app);
 
-    url: url
+  renderApp(app);
 
+  nameInput.value = "";
+  urlInput.value = "";
+}
+
+function renderApp(app) {
+  const icon = document.createElement("button");
+
+  icon.className = "app-icon";
+  icon.innerHTML = `
+    <span class="app-icon-image">🌐</span>
+    <span>${escapeHtml(app.name)}</span>
+  `;
+
+  icon.onclick = () => openApp(app);
+
+  appList.appendChild(icon);
+}
+
+function openApp(app) {
+  const windowElement = document.createElement("div");
+
+  windowElement.className = "os-window";
+
+  windowElement.innerHTML = `
+    <div class="window-titlebar">
+      <span>${escapeHtml(app.name)}</span>
+
+      <div class="window-buttons">
+        <button class="minimize">−</button>
+        <button class="maximize">□</button>
+        <button class="close">×</button>
+      </div>
+    </div>
+
+    <div class="window-toolbar">
+      <button class="back">←</button>
+
+      <input
+        class="address"
+        value="${escapeHtml(app.url)}"
+      />
+
+      <button class="go">Ir</button>
+    </div>
+
+    <div class="window-content">
+      <iframe
+        title="${escapeHtml(app.name)}"
+        src="${escapeHtml(app.url)}"
+      ></iframe>
+    </div>
+  `;
+
+  document.body.appendChild(windowElement);
+
+  makeDraggable(windowElement);
+
+  const closeButton =
+    windowElement.querySelector(".close");
+
+  closeButton.onclick = () => {
+    windowElement.remove();
+  };
+
+  const minimizeButton =
+    windowElement.querySelector(".minimize");
+
+  minimizeButton.onclick = () => {
+    windowElement.classList.toggle("minimized");
+  };
+
+  const maximizeButton =
+    windowElement.querySelector(".maximize");
+
+  maximizeButton.onclick = () => {
+    windowElement.classList.toggle("maximized");
+  };
+
+  const goButton =
+    windowElement.querySelector(".go");
+
+  const address =
+    windowElement.querySelector(".address");
+
+  const frame =
+    windowElement.querySelector("iframe");
+
+  goButton.onclick = () => {
+    try {
+      const newUrl = new URL(address.value);
+
+      if (!["http:", "https:"].includes(newUrl.protocol)) {
+        throw new Error();
+      }
+
+      frame.src = newUrl.href;
+    } catch {
+      alert("URL inválida");
+    }
+  };
+}
+
+function makeDraggable(element) {
+  const titlebar =
+    element.querySelector(".window-titlebar");
+
+  let dragging = false;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  titlebar.addEventListener("pointerdown", event => {
+    if (element.classList.contains("maximized")) {
+      return;
+    }
+
+    dragging = true;
+
+    const rect = element.getBoundingClientRect();
+
+    offsetX = event.clientX - rect.left;
+    offsetY = event.clientY - rect.top;
+
+    titlebar.setPointerCapture(event.pointerId);
   });
 
-  saveApps();
+  titlebar.addEventListener("pointermove", event => {
+    if (!dragging) return;
 
-  renderApps();
+    element.style.left =
+      `${event.clientX - offsetX}px`;
 
-  appName.value = "";
+    element.style.top =
+      `${event.clientY - offsetY}px`;
+  });
 
-  appURL.value = "";
-
-  addAppModal.classList.add(
-    "hidden"
-  );
-
-};
-
-
-/* Menú Inicio */
-
-startButton.onclick = () => {
-
-  startMenu.classList.toggle(
-    "visible"
-  );
-
-};
-
-
-/* Reloj */
-
-function updateClock() {
-
-  const now =
-    new Date();
-
-  clock.textContent =
-    now.toLocaleTimeString(
-      [],
-      {
-        hour: "2-digit",
-        minute: "2-digit"
-      }
-    );
-
+  titlebar.addEventListener("pointerup", () => {
+    dragging = false;
+  });
 }
 
-setInterval(
-  updateClock,
-  1000
-);
-
-updateClock();
-
-
-/* Seguridad HTML */
-
-function escapeHTML(text) {
-
-  return text.replace(
-    /[&<>"']/g,
-    character => ({
-
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#039;"
-
-    }[character])
-  );
-
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
-
-
-renderApps();
