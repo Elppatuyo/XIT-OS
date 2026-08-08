@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b6cff">
+  <title>WebOS 11</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <main id="desktop">
+
+    <section id="desktopApps"></section>
+
+    <div id="startMenu">
+      <h2>WebOS 11</h2>
+
+      <button id="addAppButton">
+        ＋ Agregar aplicación
+      </button>
+
+      <button id="settingsButton">
+        ⚙️ Configuración
+      </button>
+    </div>
+
+    <footer id="taskbar">
+      <button id="startButton">⊞</button>
+
+      <div id="taskbarApps"></div>
+
+      <span id="clock"></span>
+    </footer>
+
+  </main>
+
+  <!-- Ventana para agregar aplicaciones -->
+
+  <div id="addAppModal" class="modal hidden">
+
+    <div class="dialog">
+
+      <h2>Agregar aplicación</h2>
+
+      <input
+        id="appName"
+        type="text"
+        placeholder="Nombre"
+      >
+
+      <input
+        id="appURL"
+        type="url"
+        placeholder="https://ejemplo.com"
+      >
+
+      <div class="dialogButtons">
+
+        <button id="cancelButton">
+          Cancelar
+        </button>
+
+        <button id="saveButton">
+          Agregar
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+
+</body>
+</html>
